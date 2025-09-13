@@ -2,6 +2,14 @@
 set -x
 set -e
 
+# Source service utilities
+if [ -f "./service-utils.sh" ]; then
+    source ./service-utils.sh
+else
+    echo "ERROR: service-utils.sh not found"
+    exit 1
+fi
+
 # Parse command line arguments
 OFFLINE_MODE=false
 if [[ "$1" == "--offline" || "$1" == "-o" ]]; then
@@ -52,9 +60,8 @@ sudo mv license.json /etc/ravendb/license.json
 sudo chown root:ravendb /etc/ravendb/settings.json
 sudo systemctl restart ravendb
 
-# wait for RavenDB to start
-echo "Waiting for RavenDB to start..."
-sleep 10
+# Wait for RavenDB to be ready with proper polling
+wait_for_http "RavenDB" "http://127.0.0.1:8080/" "200" 60
 
 # setup the web app users
 getent group node-apps || sudo groupadd node-apps
@@ -110,9 +117,12 @@ sudo wpa_cli -i wlan0 reconfigure
 sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl start hugin
 
-# wait for services to stabilize
-echo "Waiting for services to stabilize..."
-sleep 5
+# Wait for all services to be ready with proper polling
+echo "Waiting for all services to be ready..."
+wait_for_services_parallel "ravendb" "nginx" "dnsmasq" "hugin"
+
+# Test captive portal auto-accept
+wait_for_captive_accept "Captive Portal Auto-Accept"
 
 # Run validation tests
 echo "Running validation tests..."
