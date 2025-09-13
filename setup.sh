@@ -71,7 +71,22 @@ sudo systemctl enable dnsmasq
 sudo systemctl restart dnsmasq
 sudo service dhcpcd restart
 sudo wpa_cli -i wlan0 reconfigure
-sudo nginx -s reload
+
+# generate self-signed cert for TLS to avoid HTTPS refused
+sudo mkdir -p /etc/nginx/certs
+if [ ! -s /etc/nginx/certs/start.ravendb.crt ]; then
+  sudo openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
+    -keyout /etc/nginx/certs/start.ravendb.key \
+    -out    /etc/nginx/certs/start.ravendb.crt \
+    -subj "/CN=start.ravendb" \
+    -addext "subjectAltName=DNS:start.ravendb,DNS:database.ravendb,IP:10.1.1.1"
+fi
+
+sudo nginx -t && sudo systemctl reload nginx
+
+# smoke test: record probe behavior once
+echo "$(date -Is)" >> /var/log/hugin-captive-smoke.log || true
+curl -s -o /dev/null -w "http://connectivitycheck.gstatic.com/generate_204 -> %{http_code}\n" http://connectivitycheck.gstatic.com/generate_204 >> /var/log/hugin-captive-smoke.log || true
 
 # test the db works
 curl http://127.0.0.1:8080/databases/Hugin/docs?id=questions%2Fsuperuser%2F1806936
