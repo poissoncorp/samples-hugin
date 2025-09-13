@@ -1,5 +1,13 @@
+#!/bin/bash
 set -x
 set -e
+
+# Parse command line arguments
+OFFLINE_MODE=false
+if [[ "$1" == "--offline" || "$1" == "-o" ]]; then
+    OFFLINE_MODE=true
+    echo "Running in OFFLINE mode - skipping package installation"
+fi
 
 # we assume that we have a Raspbian system running
 # with a user named rdb 
@@ -14,13 +22,27 @@ sudo mkswap /var/swap
 sudo chmod 0600 /var/swap
 sudo swapon /var/swap
 
-# install node.js from nodesource (raspbian has only node 12)
-curl -fsSL https://deb.nodesource.com/setup_21.x | sudo -E bash - && sudo apt-get install -y nodejs
+# install packages only if not in offline mode
+if [ "$OFFLINE_MODE" = false ]; then
+    echo "Installing packages from internet..."
+    # install node.js from nodesource (raspbian has only node 12)
+    curl -fsSL https://deb.nodesource.com/setup_21.x | sudo -E bash - && sudo apt-get install -y nodejs
+    
+    # install nginx and dnsmasq
+    sudo apt-get install -y nginx dnsmasq dhcpcd
+else
+    echo "Skipping package installation (offline mode)"
+    # Check if required packages are installed
+    command -v node >/dev/null 2>&1 || { echo "ERROR: node.js not found. Install manually or run without --offline flag."; exit 1; }
+    command -v nginx >/dev/null 2>&1 || { echo "ERROR: nginx not found. Install manually or run without --offline flag."; exit 1; }
+    command -v dnsmasq >/dev/null 2>&1 || { echo "ERROR: dnsmasq not found. Install manually or run without --offline flag."; exit 1; }
+    command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl not found. Install manually or run without --offline flag."; exit 1; }
+    command -v curl >/dev/null 2>&1 || { echo "ERROR: curl not found. Install manually or run without --offline flag."; exit 1; }
+fi
 
-# install nginx and dnsmasq
-sudo apt-get install -y nginx dnsmasq dhcpcd
+# install RavenDB (local package)
 sudo dpkg -i ravendb.deb
-rm  ravendb.deb
+rm ravendb.deb
 
 sudo mkdir -p /var/lib/ravendb/data/Databases
 sudo mv Hugin /var/lib/ravendb/data/Databases/Hugin
@@ -29,6 +51,10 @@ sudo mv settings.json /etc/ravendb/settings.json
 sudo mv license.json /etc/ravendb/license.json
 sudo chown root:ravendb /etc/ravendb/settings.json
 sudo systemctl restart ravendb
+
+# wait for RavenDB to start
+echo "Waiting for RavenDB to start..."
+sleep 10
 
 # setup the web app users
 getent group node-apps || sudo groupadd node-apps
@@ -45,16 +71,14 @@ sudo chown --recursive root:node-apps /usr/lib/hugin
 sudo mv hugin.service /etc/systemd/system/hugin.service
 sudo systemctl enable hugin
 
-
+# create database
+echo "Creating Hugin database..."
 curl 'http://127.0.0.1:8080/admin/databases?name=Hugin&replicationFactor=1' \
   -X 'PUT' --data-raw '{"DatabaseName":"Hugin"}' --retry 5 --retry-max-time 120 \
   || true # we ignore this error, as it might be that the database already exists
 
-
-sudo systemctl start hugin
-
-
 # configuration of the system
+echo "Configuring system services..."
 sudo mv etc.wpa_supplicant.wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf
 sudo mv etc.nginx.sites-available.default /etc/nginx/sites-available/default
 sudo mv etc.dhcpcd.conf /etc/dhcpcd.conf
@@ -63,16 +87,8 @@ sudo mv etc.dnsmasq.conf /etc/dnsmasq.conf
 sudo sed -i 's/#DNSMASQ_EXCEPT="lo"/DNSMASQ_EXCEPT="lo"/g' /etc/default/dnsmasq
 sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf 
 
-# restart services and prepare...
-sudo systemctl stop wpa_supplicant
-sudo systemctl mask wpa_supplicant
-
-sudo systemctl enable dnsmasq
-sudo systemctl restart dnsmasq
-sudo service dhcpcd restart
-sudo wpa_cli -i wlan0 reconfigure
-
 # generate self-signed cert for TLS to avoid HTTPS refused
+echo "Generating SSL certificate..."
 sudo mkdir -p /etc/nginx/certs
 if [ ! -s /etc/nginx/certs/start.ravendb.crt ]; then
   sudo openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
@@ -82,15 +98,45 @@ if [ ! -s /etc/nginx/certs/start.ravendb.crt ]; then
     -addext "subjectAltName=DNS:start.ravendb,DNS:database.ravendb,IP:10.1.1.1"
 fi
 
+# restart services and prepare...
+echo "Starting services..."
+sudo systemctl stop wpa_supplicant
+sudo systemctl mask wpa_supplicant
+
+sudo systemctl enable dnsmasq
+sudo systemctl restart dnsmasq
+sudo service dhcpcd restart
+sudo wpa_cli -i wlan0 reconfigure
 sudo nginx -t && sudo systemctl reload nginx
+sudo systemctl start hugin
 
-# smoke test: record probe behavior once
-echo "$(date -Is)" >> /var/log/hugin-captive-smoke.log || true
-curl -s -o /dev/null -w "http://connectivitycheck.gstatic.com/generate_204 -> %{http_code}\n" http://connectivitycheck.gstatic.com/generate_204 >> /var/log/hugin-captive-smoke.log || true
+# wait for services to stabilize
+echo "Waiting for services to stabilize..."
+sleep 5
 
-# test the db works
-curl http://127.0.0.1:8080/databases/Hugin/docs?id=questions%2Fsuperuser%2F1806936
+# Run validation tests
+echo "Running validation tests..."
+if [ -f "./validate-setup.sh" ]; then
+    chmod +x ./validate-setup.sh
+    ./validate-setup.sh
+    VALIDATION_EXIT_CODE=$?
+    
+    if [ $VALIDATION_EXIT_CODE -eq 0 ]; then
+        echo ""
+        echo "🎉 Setup completed successfully!"
+        echo "All critical services are working correctly."
+    else
+        echo ""
+        echo "⚠️  Setup completed with issues."
+        echo "Check the validation log for details."
+        exit 1
+    fi
+else
+    echo "WARNING: validate-setup.sh not found, skipping validation"
+    echo "You can run validation manually: ./validate-setup.sh"
+fi
 
-rm ./* -rf  # cleanup directoy
+# cleanup
+rm ./* -rf  # cleanup directory
 
 echo "Ready ..."
