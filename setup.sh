@@ -10,27 +10,38 @@ else
     exit 1
 fi
 
-# Parse command line arguments
+# Parse command line arguments (supports multiple flags)
 OFFLINE_MODE=false
 NO_SWAP=false
-if [[ "$1" == "--cleanup" ]]; then
-    if [ -f "./cleanup.sh" ]; then
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --offline|-o)
+      OFFLINE_MODE=true
+      echo "Running in OFFLINE mode - skipping package installation"
+      shift
+      ;;
+    --no-swap)
+      NO_SWAP=true
+      echo "Skipping swap setup per --no-swap"
+      shift
+      ;;
+    --cleanup)
+      shift
+      if [ -f "./cleanup.sh" ]; then
         chmod +x ./cleanup.sh
-        ./cleanup.sh "${@:2}"
+        ./cleanup.sh "$@"
         exit $?
-    else
+      else
         echo "ERROR: cleanup.sh not found in $(pwd)"
         exit 1
-    fi
-fi
-if [[ "$1" == "--offline" || "$1" == "-o" ]]; then
-    OFFLINE_MODE=true
-    echo "Running in OFFLINE mode - skipping package installation"
-fi
-if [[ "$1" == "--no-swap" ]]; then
-    NO_SWAP=true
-    echo "Skipping swap setup per --no-swap"
-fi
+      fi
+      ;;
+    *)
+      echo "Unknown option: $1" || true
+      shift
+      ;;
+  esac
+done
 
 # we assume that we have a Raspbian system running
 # with a user named rdb 
@@ -111,7 +122,8 @@ sudo mv etc.dhcpcd.conf /etc/dhcpcd.conf
 sudo mv etc.dnsmasq.conf /etc/dnsmasq.conf
 
 sudo sed -i 's/#DNSMASQ_EXCEPT="lo"/DNSMASQ_EXCEPT="lo"/g' /etc/default/dnsmasq
-sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4/ip_forward=1/g' /etc/sysctl.conf || sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf
+# ensure ipv4 forward sysctl is enabled (handle variant syntaxes)
+sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf || true
 
 # generate self-signed cert for TLS to avoid HTTPS refused
 echo "Generating SSL certificate..."
