@@ -130,7 +130,7 @@ wait_for_services_parallel() {
         (
             case "$service" in
                 "ravendb")
-                    wait_for_http "RavenDB" "http://127.0.0.1:8080/" "200" 60
+                    wait_for_http "RavenDB" "http://127.0.0.1:8080/databases" "200" 60
                     ;;
                 "nginx")
                     wait_for_http "Nginx" "http://127.0.0.1/" "302" 30

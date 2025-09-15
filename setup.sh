@@ -83,7 +83,7 @@ sudo apt install -y ./ravendb.deb || { sudo apt --fix-broken install -y && sudo 
 # rm -f ravendb.deb || true
 
 sudo mkdir -p /var/lib/ravendb/data/Databases
-sudo cp Hugin /var/lib/ravendb/data/Databases
+sudo cp -r Hugin /var/lib/ravendb/data/Databases
 sudo chown --recursive ravendb:ravendb /var/lib/ravendb/data/Databases
 sudo mv settings.json /etc/ravendb/settings.json
 sudo mv license.json /etc/ravendb/license.json
@@ -91,7 +91,7 @@ sudo chown root:ravendb /etc/ravendb/settings.json
 sudo systemctl restart ravendb
 
 # Wait for RavenDB to be ready with proper polling
-wait_for_http "RavenDB" "http://127.0.0.1:8080/" "200" 60
+wait_for_http "RavenDB" "http://127.0.0.1:8080/databases" "200" 60
 
 # setup the web app users
 getent group node-apps || sudo groupadd node-apps
