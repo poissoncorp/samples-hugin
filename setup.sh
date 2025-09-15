@@ -12,6 +12,16 @@ fi
 
 # Parse command line arguments
 OFFLINE_MODE=false
+if [[ "$1" == "--cleanup" ]]; then
+    if [ -f "./cleanup.sh" ]; then
+        chmod +x ./cleanup.sh
+        ./cleanup.sh "${@:2}"
+        exit $?
+    else
+        echo "ERROR: cleanup.sh not found in $(pwd)"
+        exit 1
+    fi
+fi
 if [[ "$1" == "--offline" || "$1" == "-o" ]]; then
     OFFLINE_MODE=true
     echo "Running in OFFLINE mode - skipping package installation"
@@ -70,7 +80,7 @@ getent passwd hugin || sudo adduser --disabled-login --disabled-password --syste
   --home /var/lib/hugin --no-create-home --quiet --gid "$NODE_GID" hugin
 
 cd /home/rdb/backend
-npm install
+npm install --omit=dev || true
 cd /home/rdb
 sudo mv ./backend /usr/lib/hugin
 sudo mv ./dist /usr/lib/hugin/dist
