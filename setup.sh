@@ -12,6 +12,7 @@ fi
 
 # Parse command line arguments
 OFFLINE_MODE=false
+NO_SWAP=false
 if [[ "$1" == "--cleanup" ]]; then
     if [ -f "./cleanup.sh" ]; then
         chmod +x ./cleanup.sh
@@ -26,6 +27,10 @@ if [[ "$1" == "--offline" || "$1" == "-o" ]]; then
     OFFLINE_MODE=true
     echo "Running in OFFLINE mode - skipping package installation"
 fi
+if [[ "$1" == "--no-swap" ]]; then
+    NO_SWAP=true
+    echo "Skipping swap setup per --no-swap"
+fi
 
 # we assume that we have a Raspbian system running
 # with a user named rdb 
@@ -34,11 +39,15 @@ fi
 sudo raspi-config nonint do_wifi_country IL
 sudo rfkill unblock wifi
 
-sudo swapoff /var/swap
-sudo dd if=/dev/zero of=/var/swap count=8 bs=128M
-sudo mkswap /var/swap
-sudo chmod 0600 /var/swap
-sudo swapon /var/swap
+# Swap setup (can be skipped with --no-swap)
+if [ "$NO_SWAP" != true ]; then
+  sudo swapoff -a || true
+  sudo rm -f /var/swap
+  sudo dd if=/dev/zero of=/var/swap count=8 bs=128M
+  sudo chmod 0600 /var/swap
+  sudo mkswap /var/swap
+  sudo swapon /var/swap
+fi
 
 # install packages only if not in offline mode
 if [ "$OFFLINE_MODE" = false ]; then
@@ -63,7 +72,7 @@ sudo apt install -y ./ravendb.deb || { sudo apt --fix-broken install -y && sudo 
 # rm -f ravendb.deb || true
 
 sudo mkdir -p /var/lib/ravendb/data/Databases
-sudo mv Hugin /var/lib/ravendb/data/Databases/Hugin
+sudo cp Hugin /var/lib/ravendb/data/Databases
 sudo chown --recursive ravendb:ravendb /var/lib/ravendb/data/Databases
 sudo mv settings.json /etc/ravendb/settings.json
 sudo mv license.json /etc/ravendb/license.json
@@ -102,7 +111,7 @@ sudo mv etc.dhcpcd.conf /etc/dhcpcd.conf
 sudo mv etc.dnsmasq.conf /etc/dnsmasq.conf
 
 sudo sed -i 's/#DNSMASQ_EXCEPT="lo"/DNSMASQ_EXCEPT="lo"/g' /etc/default/dnsmasq
-sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf 
+sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4/ip_forward=1/g' /etc/sysctl.conf || sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf
 
 # generate self-signed cert for TLS to avoid HTTPS refused
 echo "Generating SSL certificate..."
