@@ -59,8 +59,8 @@ else
 fi
 
 # install RavenDB (local package)
-sudo dpkg -i ravendb.deb
-rm ravendb.deb
+sudo apt install -y ./ravendb.deb || { sudo apt --fix-broken install -y && sudo apt install -y ./ravendb.deb; }
+# rm -f ravendb.deb || true
 
 sudo mkdir -p /var/lib/ravendb/data/Databases
 sudo mv Hugin /var/lib/ravendb/data/Databases/Hugin
@@ -114,6 +114,10 @@ if [ ! -s /etc/nginx/certs/start.ravendb.crt ]; then
     -subj "/CN=start.ravendb" \
     -addext "subjectAltName=DNS:start.ravendb,DNS:database.ravendb,IP:10.1.1.1"
 fi
+# Ensure key/cert permissions (avoid nginx permission denied)
+sudo chown root:root /etc/nginx/certs/start.ravendb.key /etc/nginx/certs/start.ravendb.crt || true
+sudo chmod 640 /etc/nginx/certs/start.ravendb.key || true
+sudo chmod 644 /etc/nginx/certs/start.ravendb.crt || true
 
 # restart services and prepare...
 echo "Starting services..."
