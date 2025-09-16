@@ -2,6 +2,16 @@
 set -x
 set -e
 
+# Error handling function
+handle_error() {
+    echo "ERROR: Script failed at line $1"
+    echo "Restoring Hugin database if it was moved..."
+    if [ -d "/var/lib/ravendb/data/Databases/Hugin" ]; then
+        sudo mv /var/lib/ravendb/data/Databases/Hugin . || true
+    fi
+    exit 1
+}
+
 # Source service utilities
 if [ -f "./service-utils.sh" ]; then
     source ./service-utils.sh
@@ -46,6 +56,9 @@ done
 # we assume that we have a Raspbian system running
 # with a user named rdb 
 
+# Set up error trap
+trap 'handle_error $LINENO' ERR
+
 # setup wifi properly
 sudo raspi-config nonint do_wifi_country IL
 sudo rfkill unblock wifi
@@ -83,12 +96,49 @@ sudo apt install -y ./ravendb.deb || { sudo apt --fix-broken install -y && sudo 
 # rm -f ravendb.deb || true
 
 sudo mkdir -p /var/lib/ravendb/data/Databases
-sudo cp -r Hugin /var/lib/ravendb/data/Databases
+
+# Check for required configuration files first
+if [ ! -f "settings.json" ]; then
+    echo "ERROR: settings.json not found in $(pwd)"
+    echo "Please ensure settings.json is in the working directory"
+    exit 1
+fi
+
+if [ ! -f "license.json" ]; then
+    echo "ERROR: license.json not found in $(pwd)"
+    echo "Please ensure license.json is in the working directory"
+    exit 1
+fi
+
+# Handle Hugin database directory with proper structure checking
+if [ -d "Hugin" ] && [ -f "Hugin/Configuration" ]; then
+    echo "Moving Hugin database (will restore if script fails)..."
+    sudo mv Hugin /var/lib/ravendb/data/Databases
+    # Set trap only after successful move
+    trap 'echo "Script failed, restoring Hugin database..."; sudo mv /var/lib/ravendb/data/Databases/Hugin . || true' EXIT
+elif [ -d "Hugin/Hugin" ]; then
+    echo "Fixing nested Hugin directory structure..."
+    sudo mv Hugin/Hugin/* Hugin/ 2>/dev/null || true
+    sudo rmdir Hugin/Hugin 2>/dev/null || true
+    sudo mv Hugin /var/lib/ravendb/data/Databases
+    trap 'echo "Script failed, restoring Hugin database..."; sudo mv /var/lib/ravendb/data/Databases/Hugin . || true' EXIT
+else
+    echo "ERROR: Hugin directory not found or invalid structure in $(pwd)"
+    echo "Available files:"
+    ls -la
+    exit 1
+fi
+
 sudo chown --recursive ravendb:ravendb /var/lib/ravendb/data/Databases
-sudo mv settings.json /etc/ravendb/settings.json
-sudo mv license.json /etc/ravendb/license.json
+
+# Copy config files (they're small, so cp is fine)
+sudo cp settings.json /etc/ravendb/settings.json
+sudo cp license.json /etc/ravendb/license.json
 sudo chown root:ravendb /etc/ravendb/settings.json
 sudo systemctl restart ravendb
+
+# Clear the database restore trap after successful config operations
+trap - EXIT
 
 # Wait for RavenDB to be ready with proper polling
 wait_for_http "RavenDB" "http://127.0.0.1:8080/databases" "200" 60
@@ -99,6 +149,8 @@ NODE_GID=$(getent group node-apps | cut -d ':' -f 3)
 getent passwd hugin || sudo adduser --disabled-login --disabled-password --system \
   --home /var/lib/hugin --no-create-home --quiet --gid "$NODE_GID" hugin
 
+# Fix permissions before npm install
+sudo chown -R rdb:rdb /home/rdb/backend
 cd /home/rdb/backend
 npm install --omit=dev || true
 cd /home/rdb
@@ -167,6 +219,8 @@ if [ -f "./validate-setup.sh" ]; then
     VALIDATION_EXIT_CODE=$?
     
     if [ $VALIDATION_EXIT_CODE -eq 0 ]; then
+        # Clear the trap since setup was successful
+        trap - EXIT
         echo ""
         echo "🎉 Setup completed successfully!"
         echo "All critical services are working correctly."
@@ -177,6 +231,8 @@ if [ -f "./validate-setup.sh" ]; then
         exit 1
     fi
 else
+    # Clear the trap since setup was successful (validation skipped)
+    trap - EXIT
     echo "WARNING: validate-setup.sh not found, skipping validation"
     echo "You can run validation manually: ./validate-setup.sh"
 fi
