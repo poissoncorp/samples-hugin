@@ -122,11 +122,15 @@ elif [ -d "Hugin/Hugin" ]; then
     sudo rmdir Hugin/Hugin 2>/dev/null || true
     sudo mv Hugin /var/lib/ravendb/data/Databases
     trap 'echo "Script failed, restoring Hugin database..."; sudo mv /var/lib/ravendb/data/Databases/Hugin . || true' EXIT
+elif [ -d "Hugin" ]; then
+    echo "WARNING: Hugin directory found but missing Configuration file"
+    echo "This might be an empty or invalid database directory"
+    echo "Proceeding without database restoration..."
 else
-    echo "ERROR: Hugin directory not found or invalid structure in $(pwd)"
+    echo "WARNING: Hugin directory not found in $(pwd)"
+    echo "Proceeding without database restoration..."
     echo "Available files:"
     ls -la
-    exit 1
 fi
 
 sudo chown --recursive ravendb:ravendb /var/lib/ravendb/data/Databases
@@ -150,21 +154,37 @@ getent passwd hugin || sudo adduser --disabled-login --disabled-password --syste
   --home /var/lib/hugin --no-create-home --quiet --gid "$NODE_GID" hugin
 
 # Fix permissions before npm install
-sudo chown -R rdb:rdb /home/rdb/backend
-cd /home/rdb/backend
+sudo chown -R rdb:rdb ./backend
+cd ./backend
 npm install --omit=dev || true
-cd /home/rdb
+cd ..
 sudo mv ./backend /usr/lib/hugin
-sudo mv ./dist /usr/lib/hugin/dist
+# Move dist directory if it exists (frontend build output)
+if [ -d "./dist" ]; then
+    sudo mv ./dist /usr/lib/hugin/dist
+    echo "Frontend dist directory moved successfully"
+elif [ -d "./frontend/dist" ]; then
+    echo "Found frontend/dist, moving to /usr/lib/hugin/dist"
+    sudo mv ./frontend/dist /usr/lib/hugin/dist
+else
+    echo "WARNING: No dist directory found (frontend not built?)"
+    echo "You may need to build the frontend: cd frontend && npm run build"
+fi
 sudo chown --recursive root:node-apps /usr/lib/hugin
 sudo mv hugin.service /etc/systemd/system/hugin.service
 sudo systemctl enable hugin
 
 # create database
 echo "Creating Hugin database..."
-curl 'http://127.0.0.1:8080/admin/databases?name=Hugin&replicationFactor=1' \
-  -X 'PUT' --data-raw '{"DatabaseName":"Hugin"}' --retry 5 --retry-max-time 120 \
-  || true # we ignore this error, as it might be that the database already exists
+# Check if database already exists
+if curl -s 'http://127.0.0.1:8080/databases' | grep -q '"Hugin"'; then
+    echo "Hugin database already exists, skipping creation..."
+else
+    echo "Creating new Hugin database..."
+    curl 'http://127.0.0.1:8080/admin/databases?name=Hugin&replicationFactor=1' \
+      -X 'PUT' --data-raw '{"DatabaseName":"Hugin"}' --retry 5 --retry-max-time 120 \
+      || echo "WARNING: Failed to create database, but continuing..."
+fi
 
 # configuration of the system
 echo "Configuring system services..."
