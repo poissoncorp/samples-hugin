@@ -23,11 +23,11 @@
     access_log /var/log/nginx/probe.access.log probe;
     add_header Cache-Control "no-store" always;
     location = /hotspot-detect.html {
-        if ($is_released = 1) { default_type text/html; return 200 "<HTML><BODY>Success</BODY></HTML>\n"; }
+        if ($is_released = 1) { return 200 "<HTML><BODY>Success</BODY></HTML>\n"; }
         return 302 http://start.ravendb;
     }
     location = /library/test/success.html {
-        if ($is_released = 1) { default_type text/html; return 200 "Success\n"; }
+        if ($is_released = 1) { return 200 "Success\n"; }
         return 302 http://start.ravendb;
     }
     location / { return 204; }
@@ -40,7 +40,7 @@
     access_log /var/log/nginx/probe.access.log probe;
     add_header Cache-Control "no-store" always;
     location = /connecttest.txt {
-        if ($is_released = 1) { default_type text/plain; return 200 "Microsoft Connect Test"; }
+        if ($is_released = 1) { return 200 "Microsoft Connect Test"; }
         return 302 http://start.ravendb;
     }
     location / { return 204; }
@@ -51,7 +51,7 @@
     access_log /var/log/nginx/probe.access.log probe;
     add_header Cache-Control "no-store" always;
     location = /ncsi.txt {
-        if ($is_released = 1) { default_type text/plain; return 200 "Microsoft NCSI"; }
+        if ($is_released = 1) { return 200 "Microsoft NCSI"; }
         return 302 http://start.ravendb;
     }
     location / { return 204; }
