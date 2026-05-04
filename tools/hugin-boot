@@ -1,0 +1,233 @@
+#!/bin/bash
+# hugin-boot — reboot recovery / auto-connect loop.
+#
+# Runs once at boot (via hugin-boot.service, ordered before hugin.service).
+# Also safe to invoke manually as `sudo hugin-boot` when the radio is stuck.
+#
+# Flow:
+#   1. Read known-networks from /var/lib/hugin/known-networks.json (written by
+#      the backend each successful client-mode join). Order by lastConnectedAt
+#      descending; take the top 3.
+#   2. For each, apply client mode and wait up to 5s for a real DHCP lease.
+#      First success wins — we exit 0 in client mode.
+#   3. If all tried networks fail (out of range / PSK wrong / no DHCP), fall
+#      back to AP mode with verification.
+#   4. If AP fails once, run a brcmfmac module reload and retry AP once.
+#   5. Final state is logged loudly. Exit 0 = radio is up in *some* reachable
+#      mode; exit 5 = nothing worked, operator must intervene.
+#
+# The heuristic "no DHCP lease = out of network area" lives here: every saved
+# network gets a 5-second budget before we count it as out-of-range and move
+# on. At the end of the gauntlet, if nothing associated, we know we're away
+# from any home/office network and AP mode is the right fallback.
+#
+# Exit codes (machine-readable, see lib/json.sh):
+#   0 OK (some mode is up)      2 usage       4 perm (not root)
+#   5 runtime (both known-networks and AP failed)
+set -euo pipefail
+
+HUGIN_SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+# shellcheck source=lib/common.sh
+source "$HUGIN_SCRIPT_DIR/lib/common.sh"
+# shellcheck source=lib/json.sh
+source "$HUGIN_LIB_DIR/json.sh"
+# shellcheck source=lib/wifi-direct.sh
+source "$HUGIN_LIB_DIR/wifi-direct.sh"
+
+KNOWN_NETWORKS_PATH=${KNOWN_NETWORKS_PATH:-/var/lib/hugin/known-networks.json}
+MAX_ATTEMPTS=${HUGIN_BOOT_MAX_ATTEMPTS:-3}
+# Per-network DHCP-wait budget. History:
+#   5 s : original. WPA handshake on cold brcmfmac alone ate ~3 s, leaving
+#         <2 s for DHCP. Home WiFi mis-classified as out of range every boot.
+#  10 s : 2026-05-04 fix v1. Still too tight for a freshly-init brcmfmac
+#         on Pi Zero 2 W — observed live boot at 18 s elapsed for "WIEZA5G"
+#         attempt before bailing.
+#  25 s : 2026-05-04 fix v2. Two full DHCP retransmits AND the cold-WPA
+#         handshake fit. Three networks × 25 s = 75 s in the worst-all-fail
+#         case, which fits inside the unit's 120 s budget alongside AP
+#         fallback (~10 s) and brcmfmac reload retry (~10 s).
+CLIENT_TIMEOUT_SEC=${HUGIN_BOOT_CLIENT_TIMEOUT:-25}
+# AP verify is a static-IP check on the local interface (no DHCP) — it
+# should complete in ~1 s once we directly assign the CIDR (see
+# wifi_apply_ap in lib/wifi-direct.sh, post-2026-05-04 fix). 8 s leaves
+# generous slack for a brcmfmac that's still settling.
+AP_VERIFY_TIMEOUT_SEC=${HUGIN_BOOT_AP_TIMEOUT:-8}
+export WIFI_VERIFY_TIMEOUT=$AP_VERIFY_TIMEOUT_SEC
+
+usage() {
+  cat <<EOF
+Usage: sudo $(basename "$0") [--ap-only] [--dry-run] [--json] [-v]
+
+Boot-time radio bring-up. Tries saved WiFi networks first, falls back to AP.
+
+Options:
+  --ap-only     Skip known-network probing; go straight to AP mode.
+  --dry-run     Print what would run; do nothing.
+  --json        Emit machine-readable JSON on stdout.
+  -v            Verbose.
+  -h            This help.
+EOF
+}
+
+AP_ONLY=0
+parse_flags "$@"
+for a in "${HUGIN_ARGS[@]}"; do
+  case "$a" in
+    --ap-only) AP_ONLY=1 ;;
+    -h|--help) usage; exit $EXIT_OK ;;
+    *) emit_json_error $EXIT_USAGE unknown-arg "unknown argument: $a" "run with --help for usage" ;;
+  esac
+done
+
+if [[ "$HUGIN_DRY_RUN" == "1" ]]; then
+  log_info "would probe top ${MAX_ATTEMPTS} known networks (timeout=${CLIENT_TIMEOUT_SEC}s each), then fall back to AP (timeout=${AP_VERIFY_TIMEOUT_SEC}s)."
+  ap_only_bool=$([[ "$AP_ONLY" == "1" ]] && echo true || echo false)
+  emit_json_success :dryRun true :apOnly "$ap_only_bool" :maxAttempts $MAX_ATTEMPTS :clientTimeoutSec $CLIENT_TIMEOUT_SEC :apTimeoutSec $AP_VERIFY_TIMEOUT_SEC
+  exit $EXIT_OK
+fi
+
+if [[ $EUID -ne 0 ]]; then
+  emit_json_error $EXIT_PERM not-root "hugin-boot requires root" "use: sudo $(basename "$0")"
+fi
+
+# Ensure /etc/wpa_supplicant/wpa_supplicant-wlan0.conf resolves to our main
+# conf so the wpa_supplicant@wlan0.service template unit (which reads the
+# -wlan0 variant) sees the same config the rest of the tooling writes.
+# Idempotent.
+if [[ ! -e /etc/wpa_supplicant/wpa_supplicant-wlan0.conf ]]; then
+  ln -sf /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+  log_info "created symlink: /etc/wpa_supplicant/wpa_supplicant-wlan0.conf -> wpa_supplicant.conf"
+fi
+
+# Globals populated by the flow below so the final JSON emission can describe
+# what actually happened without threading return values through every layer.
+RESULT_MODE=""       # "client" | "ap" | ""
+RESULT_SSID=""
+RESULT_CIDR=""
+RESULT_ATTEMPTS=0
+RESULT_TRIED_SSIDS=""   # tab-joined, for diagnostics (tab avoids clash with SSID commas)
+
+try_known_networks() {
+  if [[ ! -f "$KNOWN_NETWORKS_PATH" ]]; then
+    log_info "no known-networks file at $KNOWN_NETWORKS_PATH — skipping to AP"
+    return 1
+  fi
+
+  # Extract top-N SSIDs + PSKs sorted by lastConnectedAt desc. We use python3
+  # because jq isn't guaranteed on Raspberry Pi OS Lite; python3 is.
+  local entries
+  entries=$(python3 - "$KNOWN_NETWORKS_PATH" "$MAX_ATTEMPTS" <<'PY'
+import json, sys
+path, n = sys.argv[1], int(sys.argv[2])
+try:
+    with open(path) as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+if not isinstance(data, list):
+    sys.exit(0)
+# Newest-first, drop entries without a PSK.
+data = [x for x in data if isinstance(x, dict) and x.get("ssid") and x.get("psk")]
+data.sort(key=lambda x: x.get("lastConnectedAt", ""), reverse=True)
+for x in data[:n]:
+    # Tab-delimited so an SSID with spaces round-trips cleanly.
+    print(f"{x['ssid']}\t{x['psk']}")
+PY
+)
+
+  if [[ -z "$entries" ]]; then
+    log_info "no usable known networks — skipping to AP"
+    return 1
+  fi
+
+  # Pre-scan: ask iw what SSIDs are visible before wasting time on
+  # full WPA + DHCP attempts. ~3-5 s on a cold radio. Saves 25 s per
+  # known network that's actually out of range. The wlan0 must be
+  # `up` for scan; assume the boot order has brought it up by now.
+  # If scan itself fails we just fall through to the original "try
+  # everything" path — pre-scan is an optimisation, not a hard gate.
+  local visible_ssids
+  visible_ssids=$(timeout 8s iw dev wlan0 scan 2>/dev/null | awk -F'"' '/^\tSSID: /{print $2}' | sort -u)
+  local have_scan=0
+  [[ -n "$visible_ssids" ]] && have_scan=1
+  if (( have_scan )); then
+    local visible_count
+    visible_count=$(echo "$visible_ssids" | wc -l)
+    log_info "pre-scan: $visible_count SSIDs visible"
+  else
+    log_info "pre-scan: no result (iw scan failed?) — will try all known networks"
+  fi
+
+  local cidr=""
+  while IFS=$'\t' read -r ssid psk; do
+    [[ -z "$ssid" || -z "$psk" ]] && continue
+    # If we have a scan result and this SSID isn't in it, skip without
+    # paying the full client-mode timeout. Cuts 25 s per absent network.
+    if (( have_scan )) && ! grep -qxF "$ssid" <<< "$visible_ssids"; then
+      log_info "skip '$ssid' — not in scan visible list"
+      continue
+    fi
+    RESULT_ATTEMPTS=$((RESULT_ATTEMPTS+1))
+    RESULT_TRIED_SSIDS+="${RESULT_TRIED_SSIDS:+$'\t'}$ssid"
+    log_info "[$RESULT_ATTEMPTS/$MAX_ATTEMPTS] trying '$ssid' (timeout ${CLIENT_TIMEOUT_SEC}s, in scan)"
+    if cidr=$(wifi_apply_client "$ssid" "$psk" "$CLIENT_TIMEOUT_SEC"); then
+      log_ok "joined '$ssid' — wlan0 $cidr"
+      RESULT_MODE=client
+      RESULT_SSID=$ssid
+      RESULT_CIDR=$cidr
+      return 0
+    fi
+    log_warn "'$ssid' visible in scan but did not yield a DHCP lease in ${CLIENT_TIMEOUT_SEC}s"
+  done <<< "$entries"
+
+  return 1
+}
+
+bring_up_ap() {
+  log_info "applying AP mode (verify timeout ${AP_VERIFY_TIMEOUT_SEC}s)"
+  if wifi_apply_ap; then
+    log_ok "AP mode up — SSID '$AP_SSID' at ${AP_CIDR%/*}"
+    RESULT_MODE=ap
+    RESULT_SSID=$AP_SSID
+    RESULT_CIDR=$AP_CIDR
+    return 0
+  fi
+  log_err "AP mode verification FAILED — even after brcmfmac reload"
+  return 1
+}
+
+emit_final_success() {
+  if [[ "$HUGIN_JSON" == "1" ]]; then
+    # Build a JSON array of the SSIDs we tried. Python handles all escaping;
+    # RESULT_TRIED_SSIDS is tab-joined (NOT comma) to keep SSIDs with commas
+    # round-trippable — an SSID literally named "foo,bar" would otherwise
+    # split into two. The assignment below uses tabs accordingly.
+    local tried_json
+    tried_json=$(printf '%s' "$RESULT_TRIED_SSIDS" | python3 -c \
+      'import json,sys; s=sys.stdin.read(); print(json.dumps([x for x in s.split("\t") if x]))')
+    emit_json_success mode "$RESULT_MODE" ssid "$RESULT_SSID" cidr "$RESULT_CIDR" \
+      ip "${RESULT_CIDR%/*}" :attempts $RESULT_ATTEMPTS :triedSsids "$tried_json"
+  fi
+}
+
+main() {
+  if [[ "$AP_ONLY" == "0" ]]; then
+    if try_known_networks; then
+      [[ "$HUGIN_JSON" != "1" ]] && wifi_status_raw
+      emit_final_success
+      exit $EXIT_OK
+    fi
+    log_info "no saved network reachable — falling back to AP"
+  fi
+  if bring_up_ap; then
+    [[ "$HUGIN_JSON" != "1" ]] && wifi_status_raw
+    emit_final_success
+    exit $EXIT_OK
+  fi
+  [[ "$HUGIN_JSON" != "1" ]] && wifi_status_raw
+  emit_json_error $EXIT_RUNTIME radio-stuck \
+    "radio is stuck in no-mode after ${RESULT_ATTEMPTS} known-network attempts and AP fallback" \
+    "operator intervention required: sudo reboot"
+}
+
+main

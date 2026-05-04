@@ -1,0 +1,40 @@
+[Unit]
+Description=Hugin boot-time WiFi recovery (known-networks then AP fallback)
+# Run after the kernel has enumerated interfaces but before dhcpcd (which
+# hugin-boot will stop + restart under its own control) and well before
+# hugin.service (which needs wlan0 up to be reachable).
+After=network-pre.target sys-subsystem-net-devices-wlan0.device
+Wants=sys-subsystem-net-devices-wlan0.device
+Before=hugin.service dhcpcd.service
+# Don't block forever if wlan0 never appears — systemd will fail the unit
+# after the TimeoutStartSec budget and hugin.service will still boot into
+# a degraded state (operator will see it in hugin-doctor).
+ConditionPathExists=/usr/local/bin/hugin-boot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Worst-case budget per network attempt:
+#   teardown systemctl stop dhcpcd  ≤ 5 s  (capped in wifi_teardown_wlan0)
+#   spawn wpa_supplicant             ~ 1 s
+#   start systemctl dhcpcd          ≤ 5 s  (capped in wifi_start_dhcpcd_and_wait)
+#   DHCP wait                       = 10 s (was 5 — too tight for cold-radio WPA + DHCP)
+#   total per network              ≤ 21 s
+# Three networks ≤ 63 s + AP fallback ~12 s + brcmfmac reload retry ~12 s ≈ 90 s.
+# 120 s leaves ~30 s slack for slow udev enumeration on cold boots.
+# History:
+#   60 s: original. Blown by unbounded systemctl-stop-dhcpcd hang.
+#   90 s: 2026-05-04 first fix. Worked but client-mode 5 s DHCP wait was too tight,
+#         AP fallback fired needlessly + AP itself failed (dhcpcd timing race).
+#  120 s: 2026-05-04 second fix. Bumped DHCP wait to 10 s + AP path now uses
+#         direct `ip addr add` instead of waiting for dhcpcd's static block.
+TimeoutStartSec=120
+ExecStart=/usr/local/bin/hugin-boot
+# If the boot script exits non-zero (radio truly stuck), don't hold up the
+# rest of userspace — operator will need to SSH and diagnose.
+SuccessExitStatus=0 1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
