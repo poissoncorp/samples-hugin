@@ -122,4 +122,30 @@
   font-size: 0.9rem;
   line-height: 1.1;
   white-space: nowrap;
-}/*# sourceMappingURL=question-preview.css.map */
+}
+
+/* Author skeleton — author docs are lazy-loaded via /api/search-tail so
+   the question list can render immediately. The skeleton is a slim
+   shimmering pill that matches the eventual link's footprint. */
+.question-preview-owner-skeleton {
+  display: inline-block;
+  width: 8em;
+  height: 0.95rem;
+  vertical-align: middle;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg,
+      rgba(255,255,255,0.04) 0%,
+      rgba(255,255,255,0.14) 50%,
+      rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: question-preview-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes question-preview-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .question-preview-owner-skeleton { animation: none; }
+}
+/*# sourceMappingURL=question-preview.css.map */

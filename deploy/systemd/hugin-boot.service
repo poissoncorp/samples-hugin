@@ -9,7 +9,7 @@ Before=hugin.service dhcpcd.service
 # Don't block forever if wlan0 never appears — systemd will fail the unit
 # after the TimeoutStartSec budget and hugin.service will still boot into
 # a degraded state (operator will see it in hugin-doctor).
-ConditionPathExists=/usr/local/bin/hugin-boot
+ConditionPathExists=/usr/lib/hugin/prod_tools/hugin-boot
 
 [Service]
 Type=oneshot
@@ -29,7 +29,7 @@ RemainAfterExit=yes
 #  120 s: 2026-05-04 second fix. Bumped DHCP wait to 10 s + AP path now uses
 #         direct `ip addr add` instead of waiting for dhcpcd's static block.
 TimeoutStartSec=120
-ExecStart=/usr/local/bin/hugin-boot
+ExecStart=/usr/lib/hugin/prod_tools/hugin-boot
 # If the boot script exits non-zero (radio truly stuck), don't hold up the
 # rest of userspace — operator will need to SSH and diagnose.
 SuccessExitStatus=0 1

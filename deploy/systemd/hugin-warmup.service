@@ -1,0 +1,27 @@
+[Unit]
+Description=Hugin one-shot boot warmup (primes Ollama + RavenDB after services are reachable)
+After=hugin.service
+# No Requires/Wants — hugin-warmup is best-effort. If hugin isn't up,
+# this unit fails cleanly and the rest of the system keeps going. The
+# frontend's BootScreen polls /api/boot-status directly, so warmup
+# completion is observable even when this unit is queued behind a slow
+# hugin start.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=rdb
+# Creates /run/hugin/ owned by rdb at unit start, removes it at unit stop
+# (or on next boot). Lets the script touch /run/hugin/warmup.done without
+# needing root.
+RuntimeDirectory=hugin
+RuntimeDirectoryPreserve=yes
+# Hard timeout. The script polls /api/boot-status with its own 5 min
+# internal timeout; this is belt-and-suspenders for a wedged service.
+TimeoutStartSec=420
+ExecStart=/usr/lib/hugin/prod_tools/hugin-warmup
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

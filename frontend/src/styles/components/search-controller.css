@@ -1,29 +1,134 @@
-.search-controller-tags {
+/* Compact results-header bar. Replaces the prior big purple panel. Slim,
+   horizontal, neutrally-coloured — gets out of the way of the question list. */
+.search-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(24, 24, 38, 0.55);
+  border: 1px solid #2c3445;
+  border-radius: 10px;
+  margin-bottom: 0.85rem;
 }
 
-.search-controller-tag,
-.search-controller-community {
+.search-header-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-height: 1.6rem; /* keeps bar height stable when no chips */
+}
+
+.search-header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: rgba(56, 142, 233, 0.18);
+  border: 1px solid #388ee9;
+  color: #f0f1f6;
+}
+.search-header-chip-community {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.search-header-chip-close {
+  cursor: pointer;
+  width: 1em;
+  height: 1em;
+  opacity: 0.75;
+}
+.search-header-chip-close:hover {
+  opacity: 1;
+}
+
+.search-header-controls {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background-color: #181826;
-  padding: 3px 11.4px;
-  border-radius: 30px;
+  gap: 0.85rem;
+  flex: 0 0 auto;
 }
 
-.search-controller-close {
+.search-header-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #c3c3cf;
+}
+.search-header-sort-label {
+  font-weight: 600;
+}
+.search-header-sort-select {
+  appearance: none;
+  background: #181826;
   color: #f0f1f6;
-  font-size: 20px;
+  border: 1px solid #424554;
+  border-radius: 6px;
+  padding: 0.3rem 1.6rem 0.3rem 0.7rem;
+  font-size: 0.85rem;
   cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #888 50%),
+                    linear-gradient(135deg, #888 50%, transparent 50%);
+  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.search-header-sort-select:focus {
+  outline: 1px solid #388ee9;
+  outline-offset: 1px;
 }
 
-.search-controller-sort-by-option {
-  font-size: 16px;
-  padding: 8px;
-  background-color: #1e1f2b;
-  color: #f0f1f6;
-}/*# sourceMappingURL=search-controller.css.map */
+.search-header-mode {
+  display: inline-flex;
+  border: 1px solid #424554;
+  border-radius: 999px;
+  padding: 2px;
+  background: rgba(24, 24, 38, 0.85);
+}
+.search-header-mode-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #c3c3cf;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.search-header-mode-btn:hover:not(:disabled) { color: #f0f1f6; }
+.search-header-mode-btn.is-active {
+  background: #388ee9;
+  color: #fff;
+}
+.search-header-mode-btn:disabled { cursor: progress; opacity: 0.85; }
+.search-header-mode-btn.is-loading {
+  background: rgba(56, 142, 233, 0.22);
+  color: #c2dfff;
+}
+
+/* Tiny spinner inside the AI button while results are still on the way. */
+.search-header-mode-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #c2dfff;
+  border-radius: 50%;
+  animation: search-header-spin 0.85s linear infinite;
+}
+@keyframes search-header-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-header-mode-spinner { animation: none; }
+}

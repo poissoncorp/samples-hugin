@@ -58,11 +58,18 @@
 }
 
 .search-input-container {
-  max-width: 40em;
+  max-width: 44em;
   position: relative;
   display: flex;
   flex-wrap: wrap;
+  /* `stretch` is load-bearing for the input + button: the input has flat
+     right corners, the button has flat left corners + margin-left: -1px so
+     their borders overlap into a single joined widget. Anything other than
+     stretch breaks that visual mating. */
   align-items: stretch;
+  /* row-gap only when the items wrap to a second row — won't separate the
+     input from the button on the same row. */
+  row-gap: 0.6rem;
   width: 100%;
   text-align: center;
 }

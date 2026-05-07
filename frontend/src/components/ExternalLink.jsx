@@ -1,31 +1,69 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import ReactDOM from 'react-dom';
-import { useDispatch } from "react-redux";
 import { httpService } from '../services/http.service';
+
+// Module-level connectivity cache. The HomePage mounts ~10 ExternalLinks at
+// once; every instance previously fired its own /api/is-online probe AND
+// retried every 2.5s on failure, producing a steady-state probe storm. Now:
+// one in-flight probe is shared across all instances, the result is cached
+// for CACHE_MS, and retries on failure are exponential and capped.
+const CACHE_MS = 60_000;
+let cachedStatus = null;     // 'online' | 'offline' | null
+let cachedAt    = 0;
+let inflight    = null;      // Promise<'online'|'offline'> | null
+let nextRetryAt = 0;
+let backoffMs   = 2500;      // grows on consecutive failures, capped at 30 s
+
+const subscribers = new Set(); // notified on every status update
+
+function notify(status) {
+  for (const fn of subscribers) {
+    try { fn(status); } catch { /* swallow */ }
+  }
+}
+
+async function probeOnline() {
+  const now = Date.now();
+  if (cachedStatus && now - cachedAt < CACHE_MS) return cachedStatus;
+  if (inflight) return inflight;
+  if (cachedStatus === "offline" && now < nextRetryAt) return cachedStatus;
+
+  inflight = (async () => {
+    let next;
+    try {
+      const r = await httpService.get("is-online");
+      next = r && r.online ? "online" : "offline";
+    } catch {
+      next = "offline";
+    }
+    cachedStatus = next;
+    cachedAt = Date.now();
+    if (next === "offline") {
+      nextRetryAt = cachedAt + backoffMs;
+      backoffMs = Math.min(30_000, backoffMs * 2);
+    } else {
+      backoffMs = 2500;
+      nextRetryAt = 0;
+    }
+    inflight = null;
+    notify(next);
+    return next;
+  })();
+  return inflight;
+}
 
 export function ExternalLink({ href, children, className }) {
   const [showPopup, setShowPopup] = useState(false);
-  const [onlineStatus, setOnlineStatus] = useState("loading");
-  const dispatch = useDispatch();
+  const [onlineStatus, setOnlineStatus] = useState(cachedStatus || "loading");
 
   useEffect(() => {
-    async function checkConnectivity() {
-      try {
-        const result = await httpService.get("is-online");
-        if (result.online) {
-          setOnlineStatus("online");
-          return;
-        }
-
-      } catch (error) {
-      }
-      setOnlineStatus("offline");
-      setTimeout(checkConnectivity, 2500);
-    }
-
-    checkConnectivity();
-  }, [dispatch]);
+    let cancelled = false;
+    const onUpdate = (status) => { if (!cancelled) setOnlineStatus(status); };
+    subscribers.add(onUpdate);
+    probeOnline().then((s) => { if (!cancelled) setOnlineStatus(s); });
+    return () => { cancelled = true; subscribers.delete(onUpdate); };
+  }, []);
 
   const openPopup = (e) => {
     if (onlineStatus !== "online") {

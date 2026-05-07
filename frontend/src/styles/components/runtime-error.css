@@ -1,0 +1,48 @@
+@import "./ai-effects.css";
+
+.runtime-error-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(202, 31, 86, 0.94);
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+.runtime-error-banner.is-failed { background: #5b1726; }
+
+.runtime-error-text { font-size: 0.95rem; }
+
+.runtime-error-heal {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.6);
+  background: transparent;
+  color: #fff;
+  padding: 0.35rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.runtime-error-heal:hover { background: rgba(255,255,255,0.14); }
+
+.runtime-error-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: runtime-error-spin 0.9s linear infinite;
+}
+@keyframes runtime-error-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runtime-error-spinner { animation: none; }
+}

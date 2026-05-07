@@ -1,0 +1,65 @@
+/* Shared AI visual effects: subtle blade-shine and glow.
+ * Imported by every component that wants .ai-shine / .ai-glow.
+ */
+
+/* Blade-sweep keyframes.
+   The ::before pseudo is 20%-wide of its container; translateX percentages
+   are relative to the *element's own width*, not the parent. So to push the
+   blade fully past the right edge we need translateX >= 500% (because
+   500% × 20% = 100% of parent). Earlier values topped out around 64% reach
+   and looked like "stops in the middle, jumps back". */
+@keyframes ai-blade {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(600%); }
+}
+
+@keyframes ai-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(56, 142, 233, 0.5); }
+  70%  { box-shadow: 0 0 14px 2px rgba(56, 142, 233, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 142, 233, 0); }
+}
+
+/* Punchier ring for "you have new AI results, click here!" cues. Wider
+   bloom + brighter peak than the ambient .ai-glow used on resting CTAs. */
+@keyframes ai-pulse-strong {
+  0%   { box-shadow: 0 0 0 0   rgba(56, 142, 233, 0.85); }
+  60%  { box-shadow: 0 0 22px 6px rgba(56, 142, 233, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(56, 142, 233, 0); }
+}
+
+.ai-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ai-shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    rgba(255,255,255,0) 30%,
+    rgba(255,255,255,0.32) 50%,
+    rgba(255,255,255,0) 70%
+  );
+  width: 20%;
+  height: 100%;
+  mix-blend-mode: overlay;
+  animation: ai-blade 4s linear infinite;
+  z-index: 1;
+}
+
+.ai-glow {
+  animation: ai-pulse 2.5s ease-in-out infinite;
+}
+.ai-glow-strong {
+  animation: ai-pulse-strong 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-shine::before { display: none; }
+  .ai-glow,
+  .ai-glow-strong  { animation: none; }
+}

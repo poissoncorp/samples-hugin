@@ -1,13 +1,10 @@
 @import "../scss/colors";
 @import "../scss/bs5variables";
 
-.search-page {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 20px;
-}
+// Removed the flex on .search-page itself — it forced the inner Bootstrap
+// .row to be content-sized, which made the question column shrink/grow
+// depending on how tall the sidebar's BackendTiming card was rendering.
+// .row + .col-lg-* handle responsive layout on their own.
 
 .search-page-loader {
   font-size: 24px;
@@ -27,11 +24,4 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-@media screen and (min-width: 767px) {
-  .search-page {
-    flex-direction: row;
-    padding: 10px;
-  }
 }

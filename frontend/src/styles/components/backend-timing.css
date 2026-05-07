@@ -1,59 +1,224 @@
-.backend-timing {
+/* Redesigned timing card. Single dominant visualization (the bar), big
+   headline number, ghost-style code button, clean spacing. No more
+   redundant chip list duplicating what the bar already shows. */
+
+.card.backend-timing {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56, 142, 233, 0.10), transparent 60%),
+    rgba(24, 24, 38, 0.85);
+  border: 1px solid #2c3445;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
+  overflow: visible;
+}
+
+.backend-timing-body {
+  padding: 1rem 1.1rem 0.9rem;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0.85rem;
 }
 
+/* ── Header ───────────────────────────────────────────────────────── */
+.backend-timing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
 .backend-timing-title {
   margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #aab1c0;
+  letter-spacing: 0.01em;
 }
+.backend-timing-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.backend-timing-badge-settled { background: #388ee9; color: #fff; }
+.backend-timing-badge-loading { background: rgba(56, 142, 233, 0.22); color: #c2dfff; }
+.backend-timing-badge-fts     { background: rgba(255, 255, 255, 0.10); color: #e0e3eb; }
 
-.backend-timing-list {
+/* ── Headline ─────────────────────────────────────────────────────── */
+.backend-timing-headline {
   display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
   flex-wrap: wrap;
-  gap: 7px;
+}
+.backend-timing-total {
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f0f1f6;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.backend-timing-hardware {
+  font-size: 0.78rem;
+  color: #aab1c0;
+  line-height: 1.2;
+}
+
+/* Asterisk on the headline + the footnote that explains it. Warm amber
+   so the eye catches it next to the white headline number, but smaller
+   than the digits so it reads as a footnote marker, not a co-equal glyph. */
+.backend-timing-embed-asterisk {
+  display: inline-block;
+  margin-left: 0.12em;
+  font-size: 0.72em;
+  font-weight: 700;
+  color: #fbc53b;
+  vertical-align: super;
+  line-height: 1;
+}
+.backend-timing-embed-footnote {
+  margin: -0.4rem 0 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #888fa3;
+}
+.backend-timing-embed-footnote-mark {
+  color: #fbc53b;
+  font-weight: 700;
+  margin-right: 0.3em;
+}
+
+/* ── Bar wrapper ──────────────────────────────────────────────────── */
+.backend-timing-bar {
   margin: 0;
-  padding: 7px 0;
-  list-style: none;
+  position: relative;
+  overflow: visible;
 }
-.backend-timing-list .backend-timing-list-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  list-style: none;
+.backend-timing-bar .ai-progress-bar { margin: 0; }
+.backend-timing-bar .ai-progress-bar-track { height: 18px; }
+.backend-timing-bar .ai-progress-bar-segment-label { font-size: 0.65rem; }
+
+/* Tooltips need the parent overflow chain to be visible; was already on
+   the old design and remains correct. */
+.backend-timing,
+.backend-timing .card-body,
+.backend-timing-body,
+.backend-timing-bar,
+.backend-timing-bar .ai-progress-bar,
+.backend-timing-bar .ai-progress-bar-track {
+  overflow: visible;
+}
+
+/* ── Lazy-loaded aside ────────────────────────────────────────────── */
+.backend-timing-aside {
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-top: 0.65rem;
   margin: 0;
-  border: 1px solid #388ee9;
-  padding: 4px 11.4px;
-  border-radius: 30px;
-}
-.backend-timing-list strong {
   display: flex;
-  gap: 7px;
+  flex-direction: column;
+  gap: 0.4rem;
 }
-.backend-timing-list span {
-  display: flex;
-  gap: 3px;
-  color: var(--text-emphasis);
+.backend-timing-aside-title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888fa3;
 }
-.backend-timing-list .timing-icon {
-  width: 1.2em;
-}
-.backend-timing-list .stopwatch-icon {
-  width: 1em;
-}
-
-.backend-timing-btn {
-  display: flex !important;
+.backend-timing-aside-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 18.5px;
-  padding: 7px 18.5px !important;
+  gap: 0.55rem;
+  position: relative;
+  cursor: help;
 }
-
-.backend-timing-btn-img {
-  width: 40px;
+.backend-timing-aside-bar {
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
 }
-
-.backend-timing-btn-text {
+.backend-timing-aside-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6c757d, #aab1c0);
+  border-radius: 3px;
+}
+.backend-timing-aside-ms {
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #c3c3cf;
+}
+.backend-timing-aside-label {
+  font-size: 0.78rem;
+  color: #888fa3;
+}
+/* Hover popover (CSS-only, mirrors the bar's tooltip pattern). */
+.backend-timing-aside-row::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: #181826;
+  color: #f0f1f6;
+  border: 1px solid #424554;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  white-space: normal;
+  width: max-content;
+  max-width: 18rem;
   text-align: left;
-  line-height: 1.2em;
-}/*# sourceMappingURL=backend-timing.css.map */
+  line-height: 1.35;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0s linear 0.12s;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+}
+.backend-timing-aside-row:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.12s ease, visibility 0s linear;
+}
+
+/* ── Code button ──────────────────────────────────────────────────── */
+.backend-timing-code-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.9rem;
+  margin-top: 0.2rem;
+  width: 100%;
+  border: 1px solid #2c3445;
+  background: rgba(255, 255, 255, 0.02);
+  color: #c3c3cf;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.backend-timing-code-btn:hover {
+  background: rgba(56, 142, 233, 0.10);
+  border-color: #388ee9;
+  color: #f0f1f6;
+}
+.backend-timing-code-icon {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #ca1f56;
+  letter-spacing: -0.05em;
+}

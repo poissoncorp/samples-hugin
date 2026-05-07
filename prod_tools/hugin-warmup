@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# hugin-warmup — one-shot boot warmup script.
+#
+# Runs once (via deploy/systemd/hugin-warmup.service) after hugin.service is
+# up. Blocks until /api/boot-status reports ready for ollama+ravendb+hugin,
+# then fires a small set of representative queries to:
+#   - prime RavenDB's Voron + HNSW pages for the homepage cards
+#   - exercise Ollama (the actual embedding round-trip, not a cache hit)
+#     so the model stays resident in RAM
+#   - seed RavenDB's @embeddings-cache for likely demo prompts
+#
+# Touches /run/hugin/warmup.done on success so /api/boot-status flips
+# the warmup stage to ready and the frontend BootScreen auto-dismisses.
+#
+# Total wall: ~30-60 s on a cold Pi Zero 2 W.
+set -euo pipefail
+
+HUGIN_URL="${HUGIN_URL:-http://127.0.0.1:3030}"
+WARMUP_FLAG="/run/hugin/warmup.done"
+POLL_INTERVAL=2
+HARD_TIMEOUT=300       # 5 min — hugin-warmup.service has 7 min on top
+COMMUNITIES=(raspberrypi unix serverfault superuser)
+DEMO_PROMPTS=(
+  "raspberry pi gpio"
+  "kernel panic recovery"
+  "docker compose volumes"
+  "how do I improve battery life"
+)
+
+log() { printf '[hugin-warmup] %s\n' "$*"; }
+
+# Stage 1: wait for UPSTREAM readiness via /api/boot-status. We can't wait on
+# the top-level "ready" flag because that includes warmup itself — circular.
+# Look at ollama + ravendb stages explicitly.
+deadline=$((SECONDS + HARD_TIMEOUT))
+upstream_ready() {
+  local body="$1"
+  # Crude jq-free parse: every stage status line looks like
+  #   "ollama":{"status":"ready", ...
+  # Anchor against that pattern.
+  printf '%s' "$body" | grep -Eq '"ollama":[[:space:]]*\{[^}]*"status":[[:space:]]*"ready"' && \
+  printf '%s' "$body" | grep -Eq '"ravendb":[[:space:]]*\{[^}]*"status":[[:space:]]*"ready"'
+}
+while :; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    log "FAIL hard timeout waiting for ollama+ravendb ready (${HARD_TIMEOUT}s)"
+    exit 1
+  fi
+  body="$(curl -sS --max-time 5 "${HUGIN_URL}/api/boot-status" 2>/dev/null || true)"
+  if [ -n "$body" ] && upstream_ready "$body"; then
+    log "ollama + ravendb ready — proceeding to query warmup"
+    break
+  fi
+  sleep "$POLL_INTERVAL"
+done
+
+# Stage 2: fire representative requests. Each is best-effort; we don't fail
+# the unit if a single query errors (hugin would log it).
+hit() {
+  local label="$1"; shift
+  local url="$1"; shift
+  local t0="$SECONDS"
+  if curl -sS --max-time 60 -o /dev/null -w '' "$url"; then
+    log "${label} ok (${url##*/}) ${SECONDS}s"
+  else
+    log "${label} FAIL ${url}"
+  fi
+}
+
+hit "communities" "${HUGIN_URL}/api/communities"
+for c in "${COMMUNITIES[@]}"; do
+  hit "fts:${c}" "${HUGIN_URL}/api/search?community=${c}&pageSize=10"
+done
+# Pick one rotating prompt — keep cycle work small. The keeper loop in
+# backend/app.js rotates through the same set during steady-state.
+prompt_idx=$(( $(date +%s) / 60 % ${#DEMO_PROMPTS[@]} ))
+prompt="${DEMO_PROMPTS[$prompt_idx]}"
+prompt_enc="$(printf '%s' "$prompt" | sed 's/ /+/g')"
+hit "ai:${prompt}" "${HUGIN_URL}/api/search?mode=ai&q=${prompt_enc}&pageSize=5"
+
+# Stage 3: flip the readiness flag. /run/hugin/ is created by the unit's
+# RuntimeDirectory= directive — fall back to mkdir for manual / dev runs.
+[ -d /run/hugin ] || mkdir -p /run/hugin 2>/dev/null || true
+: > "${WARMUP_FLAG}"
+log "warmup complete — touched ${WARMUP_FLAG}"

@@ -3,9 +3,26 @@ import { getCommunities } from "../services/data.service";
 import "../styles/pages/home-page.css";
 import { useDispatch } from "react-redux";
 import { useState, useEffect } from "react";
-import BackendTiming from "../components/BackendTiming";
 import DatabaseLink from "../components/DatabaseLink";
 import { ExternalLink } from "../components/ExternalLink";
+
+// HuginAI's Communities collection stores `{ id: "communities/raspberrypi", name: "raspberrypi" }`
+// per the migration spec — no Community/Name/Description scalars. Derive the
+// pieces the homepage cards need from id + a small static metadata map.
+const COMMUNITY_META = {
+  raspberrypi: { name: "Raspberry Pi",  description: "Hardware, GPIO, kernels, OS images, and the Pi ecosystem." },
+  unix:        { name: "Unix & Linux",  description: "Shell, filesystems, processes, networking — the daily Unix grind." },
+  serverfault: { name: "Server Fault",  description: "Production servers, networks, and DevOps in the wild." },
+  superuser:   { name: "Super User",    description: "Power-user questions across operating systems and applications." },
+};
+
+function communityKey(c) {
+  if (!c) return "";
+  // Accept either { Community } (legacy), or { id: "communities/<key>" } (HuginAI), or just an id string.
+  if (c.Community) return c.Community;
+  const id = typeof c === "string" ? c : (c.id || "");
+  return id.replace(/^communities\//, "");
+}
 
 function HomePage() {
   const dispatch = useDispatch();
@@ -30,25 +47,29 @@ function HomePage() {
     <main className="home-page">
       {serverResult.data && (
         <div className="cards">
-          {serverResult.data.map((c) => (
-            <div
-              className="card tag-card"
-              onClick={() => communityClick(c.Community)}
-              key={c.Name}
-            >
-              <div className="card-content">
-                <img
-                  src={`/img/${c.Community}.svg`}
-                  alt={c.Description}
-                  className="card-img"
-                />
-                <div>
-                  <h3 className="mb-1">{c.Name}</h3>
-                  <p className="m-0">{c.Description}</p>
+          {serverResult.data.map((c) => {
+            const key = communityKey(c);
+            const meta = COMMUNITY_META[key] || { name: c.Name || c.name || key, description: c.Description || "" };
+            return (
+              <div
+                className="card tag-card"
+                onClick={() => communityClick(key)}
+                key={key}
+              >
+                <div className="card-content">
+                  <img
+                    src={`/img/${key}.svg`}
+                    alt={meta.description}
+                    className="card-img"
+                  />
+                  <div>
+                    <h3 className="mb-1">{meta.name}</h3>
+                    <p className="m-0">{meta.description}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -112,7 +133,6 @@ function HomePage() {
           </div>
           <div className="col-lg-4 mb-4">
             <div className="info-col right-col">
-              <BackendTiming timings={serverResult.timings} code={serverResult.code} />
               <DatabaseLink />
 
               <div className="card bg-faded-primary">

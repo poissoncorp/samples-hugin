@@ -1,0 +1,6 @@
+# Allow the rdb user to restart Ollama and RavenDB without a password
+# so /api/heal/* can recover those services on user click. Argv is
+# hardcoded in backend/app.js so this rule is intentionally narrow.
+#
+# Install with mode 0440 root:root (the only mode sudoers.d/ accepts).
+rdb ALL=(root) NOPASSWD: /bin/systemctl restart ollama, /bin/systemctl restart ravendb

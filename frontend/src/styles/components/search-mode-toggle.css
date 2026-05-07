@@ -1,0 +1,27 @@
+@import "./ai-effects.css";
+
+.search-mode-toggle {
+  display: inline-flex;
+  border: 1px solid #424554;
+  border-radius: 999px;
+  padding: 2px;
+  background: rgba(24, 24, 38, 0.7);
+  margin-bottom: 1rem;
+}
+
+.search-mode-toggle-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #c3c3cf;
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.search-mode-toggle-btn:hover { color: #f0f1f6; }
+.search-mode-toggle-btn.is-active {
+  background: #388ee9;
+  color: #fff;
+}

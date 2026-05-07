@@ -1,0 +1,141 @@
+@import "./ai-effects.css";
+
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 24, 31, 0.94);
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #e8eaed;
+  transition: opacity 200ms ease;
+}
+.boot-screen.is-fading { opacity: 0; pointer-events: none; }
+
+.boot-screen-card {
+  width: min(560px, calc(100vw - 32px));
+  background: #1f2530;
+  border: 1px solid #2c3445;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  padding: 28px 28px 22px;
+}
+
+.boot-screen-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.boot-screen-subtitle {
+  margin: 6px 0 18px 0;
+  font-size: 14px;
+  opacity: 0.78;
+}
+
+.boot-screen-stages {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.boot-stage {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 0 12px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #2c3445;
+  border-radius: 8px;
+}
+
+.boot-stage-icon {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 50%;
+  background: #2c3445;
+  color: #aab1c0;
+  font-weight: 700;
+}
+
+.boot-stage.is-ready .boot-stage-icon  { background: #2f7d3a; color: #d1f0d8; }
+.boot-stage.is-failed .boot-stage-icon { background: #8a2230; color: #ffd5d8; }
+
+.boot-stage-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.boot-stage-status {
+  grid-column: 3;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #2c3445;
+  color: #aab1c0;
+}
+.boot-stage-status-ready   { background: #2f7d3a; color: #d1f0d8; }
+.boot-stage-status-failed  { background: #8a2230; color: #ffd5d8; }
+.boot-stage-status-loading { background: #1d4f78; color: #c2dfff; }
+
+.boot-stage-detail {
+  grid-column: 2 / span 2;
+  font-size: 12px;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+
+.boot-stage-heal {
+  grid-column: 2 / span 2;
+  margin-top: 8px;
+  justify-self: end;
+  appearance: none;
+  border: 1px solid #ca1f56;
+  background: rgba(202, 31, 86, 0.18);
+  color: #ffd5e1;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.boot-stage-heal:disabled { opacity: 0.5; cursor: progress; }
+.boot-stage-heal:hover:not(:disabled) { background: rgba(202, 31, 86, 0.32); }
+
+.boot-screen-hint {
+  margin: 14px 0 0 0;
+  font-size: 12px;
+  opacity: 0.65;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.boot-screen-retry {
+  appearance: none;
+  border: 1px solid #424554;
+  background: rgba(255, 255, 255, 0.04);
+  color: #c2dfff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.boot-screen-retry:hover {
+  background: rgba(56, 142, 233, 0.18);
+  border-color: #388ee9;
+}

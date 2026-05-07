@@ -1,0 +1,149 @@
+.ai-progress-bar {
+  margin: 0.6rem 0 1.1rem 0;
+  font-size: 0.85rem;
+  color: #c3c3cf;
+}
+
+.ai-progress-bar-track {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 22px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #424554;
+  /* Loading variant clips the indeterminate gradient; settled allows
+     hover tooltips (::after balloons) to escape the track. */
+  overflow: visible;
+}
+.ai-progress-bar-loading .ai-progress-bar-track {
+  overflow: hidden;
+}
+.ai-progress-bar-segment:first-child {
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+}
+.ai-progress-bar-segment:last-child {
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+
+.ai-progress-bar-segment {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Keep tiny segments hoverable instead of shrinking to a sub-pixel sliver. */
+  min-width: 22px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  cursor: help;
+  background: #2f9ef3;
+}
+
+/* Tooltip balloon — content + arrow, anchored above the segment.
+   The :hover toggles opacity AND visibility so it can never appear
+   under the bar/card during the fade. */
+.ai-progress-bar-segment::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: #181826;
+  color: #f0f1f6;
+  border: 1px solid #424554;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  white-space: normal;
+  width: max-content;
+  max-width: 16rem;
+  text-align: left;
+  line-height: 1.35;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0s linear 0.12s;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+}
+.ai-progress-bar-segment:hover::after,
+.ai-progress-bar-segment:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.12s ease, visibility 0s linear;
+}
+/* Triangle pointer below the balloon. */
+.ai-progress-bar-segment::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #424554;
+  z-index: 1001;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0s linear 0.12s;
+}
+.ai-progress-bar-segment:hover::before,
+.ai-progress-bar-segment:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.12s ease, visibility 0s linear;
+}
+
+.ai-progress-bar-segment-network        { background: #6c757d; }
+.ai-progress-bar-segment-app            { background: #4f8cff; }   /* hugin app runtime (session + query build) */
+.ai-progress-bar-segment-ollama_embed   { background: #2f9ef3; }   /* Ollama brand-adjacent blue */
+.ai-progress-bar-segment-query_exec     { background: #ca1f56; }   /* RavenDB raspberry */
+.ai-progress-bar-segment-parallel_fanout{ background: #fbc53b; color: #181826; }
+
+
+.ai-progress-bar-segment-label {
+  padding: 0 0.4rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  pointer-events: none;
+  position: relative;
+  z-index: 2;
+}
+
+/* Shine overlay sits absolutely inside the segment and clips its own
+   sweep gradient so it doesn't leak past the segment edges. The segment
+   itself stays overflow:visible so the ::after tooltip can escape. */
+.ai-progress-bar-segment-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  /* .ai-shine class brings overflow:hidden + the ::before sweep animation. */
+}
+
+/* The "X total" label that used to live below the bar moved to the
+   BackendTiming headline. Bar stays focused on segments only. */
+
+.ai-progress-bar-indeterminate {
+  position: absolute;
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, rgba(56,142,233,0) 0%, #388ee9 50%, rgba(56,142,233,0) 100%);
+  animation: ai-pb-slide 1.5s ease-in-out infinite;
+}
+@keyframes ai-pb-slide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(360%); }
+}
+.ai-progress-bar-loading .ai-progress-bar-label {
+  margin-top: 0.35rem;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-progress-bar-indeterminate { animation: none; }
+}
